@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>AI Waifu Viewer</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: linear-gradient(to bottom, #000000, #1a1a2e);
+    font-family: sans-serif;
+  }
+  #canvas-container {
+    width: 100%;
+    height: 100%;
+  }
+  #top-right-bar {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    max-width: calc(100% - 20px);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-end;
+    z-index: 11;
+  }
+  #status {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: #eee;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    z-index: 10;
+  }
+  #caption {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 88%;
+    color: #fff;
+    background: rgba(0,0,0,0.65);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 18px;
+    text-align: center;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+  }
+  #caption.visible {
+    opacity: 1;
+  }
+  #chat-bar {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 92%;
+    max-width: 500px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    z-index: 10;
+  }
+  #chat-input {
+    flex: 1;
+    min-width: 90px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: none;
+    font-size: 15px;
+    outline: none;
+  }
+  #chat-send {
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    background: #ff6fa5;
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 15px;
+  }
+  #chat-send:disabled {
+    background: #888;
+    cursor: not-allowed;
+  }
+  #mic-button {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: none;
+    background: #6f9bff;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #mic-button:disabled {
+    background: #888;
+    cursor: not-allowed;
+  }
+  #mic-button.listening {
+    background: #ff4d4d;
+    animation: pulse 1s infinite;
+  }
+  @keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+  }
+  #connection-status {
+    color: #eee;
+    background: rgba(0,0,0,0.5);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  #lang-toggle {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    background: #444;
+    color: white;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    min-width: 46px;
+  }
+  #settings-button {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.5);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #image-attach-button {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: none;
+    background: #6f9bff;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #image-attach-button:disabled {
+    background: #888;
+    cursor: not-allowed;
+  }
+  #image-preview-row {
+    position: absolute;
+    bottom: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: rgba(0,0,0,0.6);
+    padding: 6px 10px;
+    border-radius: 10px;
+    z-index: 10;
+  }
+  #image-preview-row.visible {
+    display: flex;
+  }
+  #image-preview-row img {
+    height: 40px;
+    border-radius: 6px;
+  }
+  #image-preview-remove {
+    background: #888;
+    border: none;
+    color: white;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    cursor: pointer;
+    font-size: 12px;
+  }
+  #settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  #settings-overlay.visible {
+    display: flex;
+  }
+  #settings-panel {
+    background: white;
+    border-radius: 14px;
+    padding: 20px;
+    width: 420px;
+    max-width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    font-size: 14px;
+    color: #222;
+  }
+  #settings-panel h2 {
+    margin-top: 0;
+    font-size: 18px;
+  }
+  #settings-panel label {
+    display: block;
+    margin-top: 14px;
+    font-weight: bold;
+    font-size: 13px;
+  }
+  #settings-panel textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    margin-top: 6px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+  }
+  #settings-panel input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px;
+    margin-top: 6px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+  }
+  #settings-panel p {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.4;
+  }
+  #settings-save {
+    margin-top: 18px;
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: #ff6fa5;
+    color: white;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #welcome-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 110;
+  }
+  #welcome-overlay.visible {
+    display: flex;
+  }
+  #welcome-panel {
+    background: white;
+    border-radius: 14px;
+    padding: 24px;
+    width: 440px;
+    max-width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
+    font-size: 14px;
+    color: #222;
+  }
+  #welcome-panel h2 {
+    margin-top: 0;
+    font-size: 20px;
+  }
+  #welcome-panel ol {
+    padding-left: 20px;
+    line-height: 1.7;
+  }
+  #welcome-panel ol a {
+    color: #ff6fa5;
+    font-weight: bold;
+  }
+  #welcome-panel .welcome-note {
+    font-size: 12px;
+    color: #666;
+    margin-top: 14px;
+    line-height: 1.4;
+  }
+  #welcome-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  #welcome-open-settings {
+    flex: 1;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: #ff6fa5;
+    color: white;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #welcome-later {
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: none;
+    background: #eee;
+    color: #444;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="status">Loading model...</div>
+<div id="top-right-bar">
+  <button id="settings-button" title="Personality & voice settings">⚙️</button>
+  <div id="connection-status">Connecting to Yuki...</div>
+</div>
+<div id="caption"></div>
+<div id="canvas-container"></div>
+
+<div id="settings-overlay">
+  <div id="settings-panel">
+    <h2>Yuki's Settings</h2>
+
+    <label>Groq API key</label>
+    <input type="password" id="input-groq-key" placeholder="gsk_..." autocomplete="off" />
+    <p>Free at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> -- this is what lets her think and reply. Required to chat at all.</p>
+
+    <label>Fish Audio API key</label>
+    <input type="password" id="input-fish-key" placeholder="sk-fish-..." autocomplete="off" />
+    <p>Free at <a href="https://fish.audio/app/api-keys/" target="_blank" rel="noopener">fish.audio/app/api-keys</a> -- this is what gives her a voice. Optional -- without it she'll still reply, just with text only.</p>
+
+    <label>Personality</label>
+    <textarea id="input-personality" rows="10"></textarea>
+    <p>This is the instruction that defines her entire character. Changing it wipes her current memory, since a new personality shouldn't carry over the old one's.</p>
+
+    <label>Fish Audio voice ID</label>
+    <input type="text" id="input-voice-id" placeholder="e.g. 0089dce5..." />
+    <p>Find a voice you like at fish.audio, copy the ID from its page URL, and paste it here to switch her voice instantly.</p>
+
+    <button id="settings-save">Save</button>
+  </div>
+</div>
+
+<div id="welcome-overlay">
+  <div id="welcome-panel">
+    <h2>Welcome to Yuki! 👋</h2>
+    <p>She needs two free API keys to work -- one so she can think and reply, one so she can talk out loud.</p>
+    <ol>
+      <li>Get a free key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a> -- this is her brain. Required.</li>
+      <li>Get a free key at <a href="https://fish.audio/app/api-keys/" target="_blank" rel="noopener">fish.audio/app/api-keys</a> -- this is her voice. Optional (she'll still reply in text without it).</li>
+      <li>Paste both into Settings (⚙️, top right) and hit Save.</li>
+    </ol>
+    <p class="welcome-note">Both are genuinely free tiers, no card required. This only takes about 2 minutes.</p>
+    <div id="welcome-buttons">
+      <button id="welcome-open-settings">Open Settings Now</button>
+      <button id="welcome-later">Maybe Later</button>
+    </div>
+  </div>
+</div>
+
+<div id="image-preview-row">
+  <img id="image-preview-thumb" src="" alt="Attached image preview" />
+  <span>Image attached</span>
+  <button id="image-preview-remove" title="Remove image">✕</button>
+</div>
+
+<div id="chat-bar">
+  <input type="file" id="image-file-input" accept="image/*" style="display:none" />
+  <button id="image-attach-button" disabled title="Attach a picture to show Yuki">📎</button>
+  <input type="text" id="chat-input" placeholder="Say something to Yuki..." disabled />
+  <button id="lang-toggle" title="Switch voice input language">JP</button>
+  <button id="mic-button" disabled title="Speak instead of typing">🎤</button>
+  <button id="chat-send" disabled>Send</button>
+</div>
+
+<!-- Import map: lets us use clean import names for the CDN modules below -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.158.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+const statusEl = document.getElementById('status');
+
+// ---------- Basic Three.js scene setup ----------
+const scene = new THREE.Scene();
+
+// Black-to-dark-blue vertical gradient background (WebGL needs a texture for
+// this -- a plain CSS gradient can't show through a canvas)
+function createGradientTexture(colorTop, colorBottom) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 256);
+  gradient.addColorStop(0, colorTop);
+  gradient.addColorStop(1, colorBottom);
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, 2, 256);
+  return new THREE.CanvasTexture(canvas);
+}
+scene.background = createGradientTexture('#000000', '#1a1a2e');
+
+const camera = new THREE.PerspectiveCamera(
+  30,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  20
+);
+camera.position.set(0, 1.4, 2.2);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(window.devicePixelRatio);
+document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 1.2, 0);
+controls.update();
+controls.enableDamping = true;
+
+// ---------- Lighting ----------
+const light = new THREE.DirectionalLight(0xffffff, Math.PI);
+light.position.set(1, 1, 1).normalize();
+scene.add(light);
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
+// ---------- Fix default T-pose into a relaxed idle stance ----------
+function applyRelaxedPose(vrm) {
+  const humanoid = vrm.humanoid;
+  if (!humanoid) return;
+
+  const setBone = (name, x = 0, y = 0, z = 0) => {
+    const bone = humanoid.getNormalizedBoneNode(name);
+    if (bone) bone.rotation.set(x, y, z);
+  };
+
+  // Bring upper arms down from horizontal T-pose to resting at the sides
+  setBone('rightUpperArm', 0, 0, 1.0);
+  setBone('leftUpperArm', 0, 0, -1.0);
+
+  // Slight natural bend in the elbows
+  setBone('rightLowerArm', 0, 0, 0.3);
+  setBone('leftLowerArm', 0, 0, -0.3);
+}
+
+// ---------- Load the VRM model ----------
+// Put your exported .vrm file in this same "frontend" folder
+// The "?v=timestamp" bit forces the browser to always fetch the latest file
+// instead of using a cached (old) version when you re-export and replace it.
+const MODEL_PATH = './yuki.vrm?v=' + Date.now();
+
+let currentVrm = undefined;
+
+const loader = new GLTFLoader();
+loader.register((parser) => new VRMLoaderPlugin(parser));
+
+loader.load(
+  MODEL_PATH,
+  (gltf) => {
+    const vrm = gltf.userData.vrm;
+
+    // Optimize / clean up the model
+    VRMUtils.removeUnnecessaryVertices(gltf.scene);
+
+    // Only legacy VRM 0.x models need this rotation fix -- applying it to a
+    // VRM 1.0 model (which already faces the right way) would incorrectly
+    // spin it sideways.
+    const isLegacyVrm0 = vrm.meta?.metaVersion === '0';
+    if (isLegacyVrm0) VRMUtils.rotateVRM0(vrm);
+
+    scene.add(vrm.scene);
+    currentVrm = vrm;
+
+    applyRelaxedPose(vrm);
+
+    // Pupils/eyes track the camera automatically from now on
+    if (vrm.lookAt) {
+      vrm.lookAt.target = camera;
+    }
+
+    statusEl.textContent = 'Model loaded ✔';
+    setTimeout(() => (statusEl.style.display = 'none'), 1500);
+
+    console.log('VRM loaded:', vrm);
+  },
+  (progress) => {
+    const pct = ((progress.loaded / progress.total) * 100).toFixed(0);
+    statusEl.textContent = `Loading model... ${pct}%`;
+  },
+  (error) => {
+    console.error('Failed to load VRM:', error);
+    statusEl.textContent =
+      'Failed to load model.vrm — check the filename/path in index.html';
+  }
+);
+
+// ---------- Expression control (stub for later) ----------
+// Standard VRoid default expressions: 'happy', 'angry', 'sad', 'relaxed', 'surprised', 'neutral'
+window.setExpression = function (name, weight = 1.0) {
+  if (!currentVrm || !currentVrm.expressionManager) return;
+  // Reset all expressions first so they don't blend weirdly
+  const manager = currentVrm.expressionManager;
+  manager.expressions.forEach((exp) => manager.setValue(exp.expressionName, 0));
+  manager.setValue(name, weight);
+};
+
+// ---------- Mouth shape / viseme control (stub for later) ----------
+// Standard VRoid visemes: 'aa', 'ih', 'ou', 'ee', 'oh' (mapped from a/i/u/e/o)
+const VOWEL_TO_VISEME = {
+  a: 'aa',
+  i: 'ih',
+  u: 'ou',
+  e: 'ee',
+  o: 'oh',
+};
+
+window.setMouth = function (vowel, weight = 1.0) {
+  if (!currentVrm || !currentVrm.expressionManager) return;
+  const manager = currentVrm.expressionManager;
+  // Reset all visemes first
+  Object.values(VOWEL_TO_VISEME).forEach((viseme) =>
+    manager.setValue(viseme, 0)
+  );
+  const viseme = VOWEL_TO_VISEME[vowel];
+  if (viseme) manager.setValue(viseme, weight);
+};
+
+// ---------- Idle animations: blinking + occasional head turns ----------
+// Feel free to shorten these while testing — head turn is set long (20 min)
+// per your request, but 15–30 SECONDS usually feels more "alive" if you want
+// to tune it later. Just change HEAD_TURN_INTERVAL_MS below.
+const HEAD_TURN_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes
+const BLINK_MIN_INTERVAL_MS = 2000;
+const BLINK_MAX_INTERVAL_MS = 6000;
+
+let nextBlinkAt = performance.now() + randomBetween(BLINK_MIN_INTERVAL_MS, BLINK_MAX_INTERVAL_MS);
+let nextHeadTurnAt = performance.now() + HEAD_TURN_INTERVAL_MS;
+let blinkProgress = null; // null = not blinking, else 0->1->0 over the blink
+let headTurnProgress = null; // null = not turning, else animating
+
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function updateBlink(vrm, now, delta) {
+  if (!vrm.expressionManager) return;
+
+  if (blinkProgress === null && now >= nextBlinkAt) {
+    blinkProgress = 0; // start a blink
+  }
+
+  if (blinkProgress !== null) {
+    blinkProgress += delta * 6; // speed of blink
+    // Triangle wave: 0 -> 1 -> 0 over the course of the blink
+    const value = blinkProgress <= 1
+      ? blinkProgress
+      : Math.max(0, 2 - blinkProgress);
+    vrm.expressionManager.setValue('blink', value);
+
+    if (blinkProgress >= 2) {
+      blinkProgress = null;
+      nextBlinkAt = now + randomBetween(BLINK_MIN_INTERVAL_MS, BLINK_MAX_INTERVAL_MS);
+    }
+  }
+}
+
+function updateHeadTurn(vrm, now, delta) {
+  const head = vrm.humanoid?.getNormalizedBoneNode('head');
+  if (!head) return;
+
+  if (headTurnProgress === null && now >= nextHeadTurnAt) {
+    headTurnProgress = 0;
+    // Pick a random direction each time: left or right
+    head.userData.targetY = randomBetween(-0.4, 0.4);
+  }
+
+  if (headTurnProgress !== null) {
+    headTurnProgress += delta * 0.5; // speed of the turn
+    const target = headTurnProgress <= 1
+      ? head.userData.targetY * headTurnProgress
+      : head.userData.targetY * Math.max(0, 2 - headTurnProgress);
+    head.rotation.y = target;
+
+    if (headTurnProgress >= 2) {
+      headTurnProgress = null;
+      head.rotation.y = 0;
+      nextHeadTurnAt = now + HEAD_TURN_INTERVAL_MS;
+    }
+  }
+}
+
+// ---------- Mood system ----------
+// She gets sad if you don't talk to her for a while. Talking resets that timer.
+const SAD_AFTER_MS = 90 * 1000; // no talk for 90s -> sad. Tweak to taste.
+
+let lastInteractionTime = performance.now();
+let currentMood = null;
+
+function setMood(mood) {
+  if (currentMood === mood) return;
+  window.setExpression(mood);
+  currentMood = mood;
+}
+
+function registerInteraction() {
+  lastInteractionTime = performance.now();
+}
+
+function updateMood(now) {
+  const idleMs = now - lastInteractionTime;
+  setMood(idleMs > SAD_AFTER_MS ? 'sad' : 'neutral');
+}
+
+// ---------- Animation loop ----------
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+
+  if (currentVrm) {
+    currentVrm.update(delta);
+    updateBlink(currentVrm, performance.now(), delta);
+    updateHeadTurn(currentVrm, performance.now(), delta);
+    updateMood(performance.now());
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+// ---------- Handle window resize ----------
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ---------- Connect to Yuki's brain (backend/server.py) ----------
+const connectionStatusEl = document.getElementById('connection-status');
+const chatInput = document.getElementById('chat-input');
+const chatSend = document.getElementById('chat-send');
+const captionEl = document.getElementById('caption');
+const imageAttachButton = document.getElementById('image-attach-button');
+const imageFileInput = document.getElementById('image-file-input');
+const imagePreviewRow = document.getElementById('image-preview-row');
+const imagePreviewThumb = document.getElementById('image-preview-thumb');
+const imagePreviewRemove = document.getElementById('image-preview-remove');
+
+let socket;
+let captionHideTimer = null;
+
+function connectToBackend() {
+  socket = new WebSocket('ws://localhost:8765');
+
+  socket.onopen = () => {
+    connectionStatusEl.textContent = 'Connected to Yuki ✔';
+    chatInput.disabled = false;
+    chatSend.disabled = false;
+    imageAttachButton.disabled = false;
+    micButton.disabled = !speechRecognitionSupported;
+  };
+
+  socket.onclose = () => {
+    connectionStatusEl.textContent = 'Disconnected — retrying...';
+    chatInput.disabled = true;
+    chatSend.disabled = true;
+    imageAttachButton.disabled = true;
+    micButton.disabled = true;
+    // Try to reconnect every 3 seconds (e.g. if you restart server.py)
+    setTimeout(connectToBackend, 3000);
+  };
+
+  socket.onerror = () => {
+    connectionStatusEl.textContent = 'Cannot reach Yuki (is server.py running?)';
+  };
+
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === 'reply') {
+      handleReply(data.text, data.emotion, data.audio_base64);
+    } else if (data.type === 'error') {
+      console.error('Backend error:', data.message);
+      showCaption(`⚠️ ${data.message}`);
+      hideCaptionAfter(7000);
+    } else if (data.type === 'current_settings') {
+      inputPersonality.value = data.personality;
+      inputVoiceId.value = data.fishVoiceId;
+      inputGroqKey.value = data.groqApiKey || '';
+      inputFishKey.value = data.fishApiKey || '';
+      if (!data.groqApiKey) {
+        welcomeOverlay.classList.add('visible'); // fresh install, no key yet -- guide them
+      }
+    } else if (data.type === 'settings_saved') {
+      settingsSaveButton.textContent = 'Saved ✔';
+      setTimeout(() => (settingsSaveButton.textContent = 'Save'), 1500);
+    }
+  };
+}
+connectToBackend();
+
+// ---------- Settings panel (personality + voice + API keys, editable without touching code) ----------
+const settingsButton = document.getElementById('settings-button');
+const settingsOverlay = document.getElementById('settings-overlay');
+const inputPersonality = document.getElementById('input-personality');
+const inputVoiceId = document.getElementById('input-voice-id');
+const inputGroqKey = document.getElementById('input-groq-key');
+const inputFishKey = document.getElementById('input-fish-key');
+const settingsSaveButton = document.getElementById('settings-save');
+
+settingsButton.addEventListener('click', () => {
+  settingsOverlay.classList.add('visible');
+});
+
+settingsOverlay.addEventListener('click', (e) => {
+  if (e.target === settingsOverlay) settingsOverlay.classList.remove('visible');
+});
+
+// ---------- First-run welcome popup ----------
+// Shown automatically whenever there's no Groq key configured yet (see
+// current_settings above) -- i.e. a genuinely fresh install, not something
+// that nags on every launch once a key's been saved.
+const welcomeOverlay = document.getElementById('welcome-overlay');
+const welcomeOpenSettingsBtn = document.getElementById('welcome-open-settings');
+const welcomeLaterBtn = document.getElementById('welcome-later');
+
+welcomeOpenSettingsBtn.addEventListener('click', () => {
+  welcomeOverlay.classList.remove('visible');
+  settingsOverlay.classList.add('visible');
+});
+
+welcomeLaterBtn.addEventListener('click', () => {
+  welcomeOverlay.classList.remove('visible');
+});
+
+welcomeOverlay.addEventListener('click', (e) => {
+  if (e.target === welcomeOverlay) welcomeOverlay.classList.remove('visible');
+});
+
+settingsSaveButton.addEventListener('click', () => {
+  if (!socket || socket.readyState !== WebSocket.OPEN) return;
+
+  const newPersonality = inputPersonality.value.trim();
+  const newVoiceId = inputVoiceId.value.trim();
+  const newGroqKey = inputGroqKey.value.trim();
+  const newFishKey = inputFishKey.value.trim();
+
+  socket.send(JSON.stringify({ type: 'set_personality', personality: newPersonality }));
+  socket.send(JSON.stringify({ type: 'set_voice', fishVoiceId: newVoiceId }));
+  socket.send(JSON.stringify({ type: 'set_api_keys', groqApiKey: newGroqKey, fishApiKey: newFishKey }));
+
+  settingsOverlay.classList.remove('visible');
+});
+
+let pendingImageBase64 = null; // set when the user attaches a picture; cleared after it's sent
+
+function sendMessage() {
+  const text = chatInput.value.trim();
+  if ((!text && !pendingImageBase64) || !socket || socket.readyState !== WebSocket.OPEN) return;
+  socket.send(JSON.stringify({ text, image_base64: pendingImageBase64 || undefined }));
+  registerInteraction(); // counts as "talked to her" -- prevents sadness only
+  chatInput.value = '';
+  clearAttachedImage();
+}
+
+chatSend.addEventListener('click', sendMessage);
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// ---------- Attaching a picture to show her ----------
+// Purely user-initiated: nothing is sent until you pick a file and hit Send.
+imageAttachButton.addEventListener('click', () => imageFileInput.click());
+
+imageFileInput.addEventListener('change', () => {
+  const file = imageFileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    // reader.result looks like "data:image/png;base64,AAAA..." -- backend
+    // only wants the base64 part after the comma
+    pendingImageBase64 = reader.result.split(',')[1];
+    imagePreviewThumb.src = reader.result;
+    imagePreviewRow.classList.add('visible');
+  };
+  reader.readAsDataURL(file);
+  imageFileInput.value = ''; // lets you pick the same file again later
+});
+
+function clearAttachedImage() {
+  pendingImageBase64 = null;
+  imagePreviewThumb.src = '';
+  imagePreviewRow.classList.remove('visible');
+}
+
+imagePreviewRemove.addEventListener('click', clearAttachedImage);
+
+// ---------- Voice input (browser's built-in speech recognition, free) ----------
+const micButton = document.getElementById('mic-button');
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+const speechRecognitionSupported = !!SpeechRecognitionAPI;
+
+if (!speechRecognitionSupported) {
+  micButton.title = 'Voice input not supported in this browser (try Chrome or Edge)';
+}
+
+let recognition = null;
+let micLang = 'ja-JP'; // starts in Japanese; toggle button switches this
+
+if (speechRecognitionSupported) {
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = micLang;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    chatInput.value = transcript;
+    sendMessage();
+  };
+
+  recognition.onerror = (event) => {
+    console.error('Speech recognition error:', event.error);
+    micButton.classList.remove('listening');
+  };
+
+  recognition.onend = () => {
+    console.log('Speech recognition ended (no result captured if nothing showed up)');
+    micButton.classList.remove('listening');
+  };
+}
+
+micButton.addEventListener('click', () => {
+  if (!recognition) return;
+  micButton.classList.add('listening');
+  recognition.start();
+});
+
+const langToggle = document.getElementById('lang-toggle');
+langToggle.addEventListener('click', () => {
+  micLang = micLang === 'ja-JP' ? 'en-US' : 'ja-JP';
+  langToggle.textContent = micLang === 'ja-JP' ? 'JP' : 'EN';
+  if (recognition) recognition.lang = micLang;
+});
+
+// ---------- Caption display ----------
+function showCaption(text) {
+  captionEl.textContent = text;
+  captionEl.classList.add('visible');
+  if (captionHideTimer) clearTimeout(captionHideTimer);
+}
+
+function hideCaptionAfter(ms) {
+  if (captionHideTimer) clearTimeout(captionHideTimer);
+  captionHideTimer = setTimeout(() => {
+    captionEl.classList.remove('visible');
+  }, ms);
+}
+
+// ---------- Mouth sync driven by actual audio volume ----------
+// We don't get true phoneme timing from the TTS, so instead we analyze the
+// live audio volume and cycle through the 5 vowel mouth shapes while she's
+// talking -- this has TOP PRIORITY and overrides idle mouth state while active.
+const VOWEL_CYCLE = ['a', 'i', 'u', 'e', 'o'];
+let vowelCycleIndex = 0;
+let isSpeaking = false;
+
+function handleReply(text, emotion, audioBase64) {
+  showCaption(text);
+  registerInteraction(); // she's talking -- counts as "not neglected", but not a happy trigger
+
+  // Decode base64 audio into a playable blob URL
+  const audioBytes = atob(audioBase64);
+  const byteArray = new Uint8Array(audioBytes.length);
+  for (let i = 0; i < audioBytes.length; i++) {
+    byteArray[i] = audioBytes.charCodeAt(i);
+  }
+  const audioBlob = new Blob([byteArray], { type: 'audio/mpeg' });
+  const audioUrl = URL.createObjectURL(audioBlob);
+  const audio = new Audio(audioUrl);
+
+  // Set up Web Audio analysis to drive mouth movement from volume
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const source = audioCtx.createMediaElementSource(audio);
+  const analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+  analyser.connect(audioCtx.destination);
+
+  const dataArray = new Uint8Array(analyser.frequencyBinCount);
+  let lastVowelSwitch = 0;
+
+  function updateMouthFromAudio(timestamp) {
+    if (!isSpeaking) return;
+
+    analyser.getByteFrequencyData(dataArray);
+    const avgVolume = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+    const mouthWeight = Math.min(1, avgVolume / 60); // scale to 0-1 roughly
+
+    // Cycle through vowels every ~120ms while there's audible volume,
+    // giving a natural "talking" flap instead of a static open mouth
+    if (timestamp - lastVowelSwitch > 120) {
+      vowelCycleIndex = (vowelCycleIndex + 1) % VOWEL_CYCLE.length;
+      lastVowelSwitch = timestamp;
+    }
+
+    window.setMouth(VOWEL_CYCLE[vowelCycleIndex], mouthWeight);
+    requestAnimationFrame(updateMouthFromAudio);
+  }
+
+  audio.addEventListener('play', () => {
+    isSpeaking = true;
+    audioCtx.resume();
+    requestAnimationFrame(updateMouthFromAudio);
+  });
+
+  audio.addEventListener('ended', () => {
+    isSpeaking = false;
+    window.setMouth('a', 0); // close mouth
+    hideCaptionAfter(4000);
+    URL.revokeObjectURL(audioUrl);
+  });
+
+  audio.play();
+}
+</script>
+
+</body>
+</html>
