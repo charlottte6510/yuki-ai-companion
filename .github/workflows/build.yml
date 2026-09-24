@@ -1,0 +1,59 @@
+name: Build Yuki - Linux
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # lets you trigger a build manually from GitHub's UI
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            python3-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.0-dev \
+            gir1.2-webkit2-4.0 \
+            libgirepository1.0-dev \
+            pkg-config \
+            gcc
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: |
+          pyinstaller \
+            --name Yuki-Linux \
+            --onedir \
+            --add-data "index.html:." \
+            --add-data "yuki.vrm:." \
+            --collect-all pywebview \
+            app.py
+
+      - name: Zip the build
+        run: |
+          cd dist
+          zip -r Yuki-Linux.zip Yuki-Linux/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Yuki-Linux
+          path: dist/Yuki-Linux.zip
+          retention-days: 30
