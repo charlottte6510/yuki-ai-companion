@@ -46,7 +46,7 @@ jobs:
             --add-data "index.html:." \
             --add-data "yuki.vrm:." \
             --collect-all pywebview \
-            app.py
+            App.py
 
       - name: Zip the build
         run: |
